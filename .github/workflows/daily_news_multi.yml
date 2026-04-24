@@ -1,8 +1,11 @@
-name: Daily News Multi-Source
+name: Daily News Multi-Source Signed
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
   schedule:
-    - cron: '0 0 * * *' # UTC每天00:00 → 北京时间08:00
+    - cron: '0 0 * * *'  # UTC每天00:00 → 北京时间08:00
   workflow_dispatch:
 
 jobs:
@@ -20,8 +23,9 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run multi-source news bot
+      - name: Run multi-source signed news bot
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}  # 如果未启用加签可以留空
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-        run: python news_bot_multi.py
+        run: python news_bot_multi_signed.py
