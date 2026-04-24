@@ -1,4 +1,4 @@
-name: Daily News Multi-Source Signed
+name: Daily News Safe
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -23,9 +23,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run multi-source signed news bot
+      - name: Run news bot safe
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
-          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}  # 如果未启用加签可以留空
+          DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-        run: python news_bot_multi_signed.py
+        run: |
+          set -o pipefail
+          python news_bot_multi_safe.py 2>&1 | tee output.log
