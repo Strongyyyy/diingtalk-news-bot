@@ -9,19 +9,26 @@ import base64
 import urllib.parse
 
 # ------------------------------
-# 配置部分
+# 配置
 # ------------------------------
 DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK")
-DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")
+DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")  # 未启用加签留空
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 CACHE_FILE = "sent_news.txt"
 
+# 多来源示例
 NEWS_SOURCES = [
     {
         "name": "聚合数据头条",
         "url": "http://v.juhe.cn/toutiao/index",
         "params": lambda: {"key": NEWS_API_KEY, "type": "top"}
-    }
+    },
+    # 可以加更多来源，例如：
+    # {
+    #     "name": "今日头条示例",
+    #     "url": "https://api.example.com/news",
+    #     "params": lambda: {"apikey": NEWS_API_KEY}
+    # }
 ]
 
 # ------------------------------
@@ -41,15 +48,17 @@ def get_signed_webhook(webhook, secret):
         return webhook
 
 # ------------------------------
-# 获取新闻
+# 新闻获取
 # ------------------------------
 def get_news_from_source(source):
+    print(f"\n===== 获取新闻来源: {source['name']} =====")
     if not NEWS_API_KEY:
         print(f"[{source['name']}] NEWS_API_KEY 未设置")
         return []
     try:
         r = requests.get(source["url"], params=source["params"](), timeout=10)
         data = r.json()
+        print(f"[{source['name']}] 接口返回: {json.dumps(data, ensure_ascii=False)[:500]}...")
         if data.get('error_code') != 0:
             print(f"[{source['name']}] 获取新闻失败: {data.get('reason')}")
             return []
@@ -66,7 +75,7 @@ def get_all_news():
     return all_news
 
 # ------------------------------
-# 去重 + 缓存
+# 去重
 # ------------------------------
 def load_sent_titles():
     try:
@@ -128,8 +137,10 @@ if __name__ == "__main__":
         sent_titles = load_sent_titles()
         all_news = get_all_news()
         new_news = deduplicate_news(all_news, sent_titles)
+        print(f"\n本次获取新闻数量: {len(all_news)}, 去重后新增数量: {len(new_news)}")
         result = send_to_dingtalk(new_news)
         print("发送结果:", result)
+
         if new_news:
             save_sent_titles(sent_titles.union({n["title"] for n in new_news}))
     except Exception as e:
