@@ -1,25 +1,29 @@
-name: Daily News Bot
+name: Daily Hot News Bot
 
 on:
   schedule:
     # 每天北京时间 8:00 执行（UTC 0:00）
     - cron: '0 0 * * *'
-  workflow_dispatch:    # 允许手动触发
+  # 允许手动触发，方便测试
+  workflow_dispatch:
 
 jobs:
   run-news-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
+
       - name: 安装 Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+
       - name: 安装依赖
-        run: pip install requests beautifulsoup4
-      - name: 执行爬虫脚本
+        run: pip install requests
+
+      - name: 执行热搜推送脚本
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
-          JUHE_NEWS_API_KEY: ${{ secrets.JUHE_NEWS_API_KEY }}   # ← 这一行必须存在
         run: python news_bot.py
