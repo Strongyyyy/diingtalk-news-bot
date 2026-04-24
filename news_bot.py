@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import re
 import time
 import hmac
 import json
@@ -12,7 +11,6 @@ import urllib.parse
 from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
 
 # ================== 配置 ==================
 # 从环境变量读取钉钉机器人信息（GitHub Actions Secrets 中配置）
@@ -22,63 +20,58 @@ DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")
 # 请求头，模拟浏览器
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
+    "Accept": "application/json, text/plain, */*"
 }
 # =========================================
 
 
 def fetch_zhihu_hot(limit=10):
-    """通过每日热榜API获取知乎热榜"""
-    # 使用公益的 DailyHot API 服务，无需鉴权
-    api_url = "https://api.vvhan.com/api/hotlist/zhihu"
+    """通过公开 API 获取知乎热榜"""
+    # 使用一个相对稳定的知乎热榜 API (由第三方提供，不需鉴权)
+    api_url = "https://api.72v2.com/zhihu_hot"
     try:
-        resp = requests.get(api_url, headers=HEADERS, timeout=15)
+        resp = requests.get(api_url, headers=HEADERS, timeout=10)
         data = resp.json()
-        
-        if data.get("success"):
-            news_list = []
-            for item in data.get("data", [])[:limit]:
+        # 该 API 返回格式: {"code":200, "data": [...]}
+        if data.get("code") == 200:
+            items = data.get("data", [])
+            hot_list = []
+            for item in items[:limit]:
                 title = item.get("title", "")
-                # 你可以在这里自由添加其他字段，如热度值等
-                # hot_score = item.get("hot", "")
                 if title:
-                    news_list.append(f"{title}")
-            if not news_list:
-                return ["⚠️ 知乎热榜暂无数据，请稍后重试"]
-            return news_list
+                    hot_list.append(title)
+            if hot_list:
+                return hot_list
+            else:
+                return ["⚠️ 知乎热榜暂无有效数据"]
         else:
-            return [f"❌ 知乎热榜API异常: {data.get('message', '未知错误')}"]
+            return [f"⚠️ 知乎热榜 API 返回异常: {data.get('msg', '未知错误')}"]
     except Exception as e:
-        return [f"❌ 知乎热榜API连接异常: {str(e)}"]
+        return [f"❌ 知乎热榜连接失败: {str(e)}"]
 
 
-def fetch_reddit_hot(limit=10):
-    """抓取 Reddit 热门帖子（国际热点）"""
-    url = "https://www.reddit.com/r/all/top.json?limit={limit}&t=day" + str(limit)
+def fetch_weibo_hot(limit=10):
+    """通过公开 API 获取微博热搜"""
+    # 使用一个稳定的微博热搜 API
+    api_url = "https://api.72v2.com/weibo_hot"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(api_url, headers=HEADERS, timeout=10)
         data = resp.json()
-        posts = data.get("data", {}).get("children", [])
-        hot_list = []
-        for post in posts:
-            title = post.get("data", {}).get("title", "")
-            # 简单过滤掉广告或过短的标题
-            if title and len(title) > 5:
-                hot_list.append(title)
-        if not hot_list:
-            return ["⚠️ Reddit 热门抓取失败（可能API变动）"]
-        return hot_list
+        if data.get("code") == 200:
+            items = data.get("data", [])
+            hot_list = []
+            for item in items[:limit]:
+                title = item.get("title", "")
+                if title:
+                    hot_list.append(title)
+            if hot_list:
+                return hot_list
+            else:
+                return ["⚠️ 微博热搜暂无有效数据"]
+        else:
+            return [f"⚠️ 微博热搜 API 返回异常: {data.get('msg', '未知错误')}"]
     except Exception as e:
-        return [f"❌ Reddit 异常: {str(e)}"]
+        return [f"❌ 微博热搜连接失败: {str(e)}"]
 
 
 def format_news_section(title, news_list, emoji="📌"):
@@ -111,7 +104,7 @@ def send_to_dingtalk(content_markdown):
     payload = {
         "msgtype": "markdown",
         "markdown": {
-            "title": "实时热点新闻",
+            "title": "国内热点新闻",
             "text": content_markdown
         }
     }
@@ -131,21 +124,21 @@ def send_to_dingtalk(content_markdown):
 
 
 def main():
-    print(f"⏰ 开始抓取新闻 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"⏰ 开始抓取国内热点 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # 抓取国内热点（知乎）
-    domestic = fetch_zhihu_hot(limit=8)
-    # 抓取国际热点（Reddit）
-    international = fetch_reddit_hot(limit=8)
+    # 抓取知乎热榜
+    zhihu_list = fetch_zhihu_hot(limit=8)
+    # 抓取微博热搜
+    weibo_list = fetch_weibo_hot(limit=8)
 
     # 构造 Markdown 消息
-    md_content = f"# 🔥 每日热点新闻\n> 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    md_content += format_news_section("🇨🇳 国内·知乎热榜", domestic, "📰")
+    md_content = f"# 🔥 国内热点新闻\n> 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    md_content += format_news_section("📰 知乎热榜", zhihu_list, "📌")
     md_content += "\n---\n\n"
-    md_content += format_news_section("🌍 国际·Reddit 热门", international, "🌐")
+    md_content += format_news_section("🔥 微博热搜", weibo_list, "🔥")
     md_content += "\n---\n> 🤖 推送由 GitHub Actions 自动完成"
 
-    # 限制总长度 (钉钉 Markdown 限制为 2000 字符以内，稍作截断)
+    # 钉钉 Markdown 消息长度限制约 2000 字符，做安全截断
     if len(md_content) > 1900:
         md_content = md_content[:1900] + "\n\n...(内容过长已截断)"
 
