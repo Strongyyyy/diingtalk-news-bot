@@ -1,9 +1,9 @@
-name: Daily News
+name: Daily News Multi-Source
 
 on:
   schedule:
-    - cron: '0 0 * * *' # UTC 时间每天 00:00 → 北京时间 08:00
-  workflow_dispatch: # 手动触发
+    - cron: '0 0 * * *' # UTC每天00:00 → 北京时间08:00
+  workflow_dispatch:
 
 jobs:
   send-news:
@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run news bot
+      - name: Run multi-source news bot
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-        run: python news_bot.py
+        run: python news_bot_multi.py
