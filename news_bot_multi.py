@@ -12,7 +12,7 @@ import urllib.parse
 # 配置部分
 # ------------------------------
 DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK")
-DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")  # 如果未启用加签可以留空
+DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 CACHE_FILE = "sent_news.txt"
 
@@ -25,7 +25,7 @@ NEWS_SOURCES = [
 ]
 
 # ------------------------------
-# 钉钉加签处理
+# 钉钉加签
 # ------------------------------
 def get_signed_webhook(webhook, secret):
     if not secret:
@@ -44,12 +44,12 @@ def get_signed_webhook(webhook, secret):
 # 获取新闻
 # ------------------------------
 def get_news_from_source(source):
+    if not NEWS_API_KEY:
+        print(f"[{source['name']}] NEWS_API_KEY 未设置")
+        return []
     try:
-        if not NEWS_API_KEY:
-            print(f"[{source['name']}] NEWS_API_KEY 未设置")
-            return []
-        response = requests.get(source["url"], params=source["params"](), timeout=10)
-        data = response.json()
+        r = requests.get(source["url"], params=source["params"](), timeout=10)
+        data = r.json()
         if data.get('error_code') != 0:
             print(f"[{source['name']}] 获取新闻失败: {data.get('reason')}")
             return []
@@ -62,12 +62,11 @@ def get_news_from_source(source):
 def get_all_news():
     all_news = []
     for source in NEWS_SOURCES:
-        news_items = get_news_from_source(source)
-        all_news.extend(news_items)
+        all_news.extend(get_news_from_source(source))
     return all_news
 
 # ------------------------------
-# 去重处理
+# 去重 + 缓存
 # ------------------------------
 def load_sent_titles():
     try:
@@ -91,10 +90,13 @@ def deduplicate_news(news_list, sent_titles):
     return [n for n in news_list if n["title"] not in sent_titles]
 
 # ------------------------------
-# 推送到钉钉
+# 推送钉钉
 # ------------------------------
 def send_to_dingtalk(news_list):
     try:
+        if not DINGTALK_WEBHOOK:
+            print("DINGTALK_WEBHOOK 未设置，跳过推送")
+            return "Webhook 未设置"
         if not news_list:
             message = f"今日没有新新闻 ({datetime.now().strftime('%Y-%m-%d')})"
         else:
@@ -117,7 +119,7 @@ def send_to_dingtalk(news_list):
 # 主程序
 # ------------------------------
 if __name__ == "__main__":
-    print("调试信息:")
+    print("===== 调试信息 =====")
     print("DINGTALK_WEBHOOK:", "存在" if DINGTALK_WEBHOOK else "未设置")
     print("DINGTALK_SECRET:", "存在" if DINGTALK_SECRET else "未设置")
     print("NEWS_API_KEY:", "存在" if NEWS_API_KEY else "未设置")
@@ -128,9 +130,9 @@ if __name__ == "__main__":
         new_news = deduplicate_news(all_news, sent_titles)
         result = send_to_dingtalk(new_news)
         print("发送结果:", result)
-
         if new_news:
-            updated_titles = sent_titles.union({n["title"] for n in new_news})
-            save_sent_titles(updated_titles)
+            save_sent_titles(sent_titles.union({n["title"] for n in new_news}))
     except Exception as e:
         print("主程序异常:", e)
+
+    print("===== 脚本结束 =====")
