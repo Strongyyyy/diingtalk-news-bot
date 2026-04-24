@@ -21,36 +21,49 @@ DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")
 
 # 请求头，模拟浏览器
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
 # =========================================
 
 
 def fetch_zhihu_hot(limit=10):
-    """抓取知乎热榜（国内热点）"""
-    url = "https://www.zhihu.com/hot"
+    """通过每日热榜API获取知乎热榜"""
+    # 使用公益的 DailyHot API 服务，无需鉴权
+    api_url = "https://api.vvhan.com/api/hotlist/zhihu"
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.encoding = "utf-8"
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # 知乎热榜的条目结构：div.HotList-item
-        items = soup.select(".HotList-item")
-        hot_list = []
-        for item in items[:limit]:
-            title_tag = item.select_one(".HotList-itemTitle")
-            if title_tag:
-                title = title_tag.get_text(strip=True)
-                hot_list.append(title)
-        if not hot_list:
-            return ["⚠️ 知乎热榜抓取失败（可能页面结构调整）"]
-        return hot_list
+        resp = requests.get(api_url, headers=HEADERS, timeout=15)
+        data = resp.json()
+        
+        if data.get("success"):
+            news_list = []
+            for item in data.get("data", [])[:limit]:
+                title = item.get("title", "")
+                # 你可以在这里自由添加其他字段，如热度值等
+                # hot_score = item.get("hot", "")
+                if title:
+                    news_list.append(f"{title}")
+            if not news_list:
+                return ["⚠️ 知乎热榜暂无数据，请稍后重试"]
+            return news_list
+        else:
+            return [f"❌ 知乎热榜API异常: {data.get('message', '未知错误')}"]
     except Exception as e:
-        return [f"❌ 知乎热榜异常: {str(e)}"]
+        return [f"❌ 知乎热榜API连接异常: {str(e)}"]
 
 
 def fetch_reddit_hot(limit=10):
     """抓取 Reddit 热门帖子（国际热点）"""
-    url = "https://www.reddit.com/r/all/hot.json?limit=" + str(limit)
+    url = "https://www.reddit.com/r/all/top.json?limit={limit}&t=day" + str(limit)
     try:
         resp = requests.get(url, headers=HEADERS, timeout=15)
         data = resp.json()
