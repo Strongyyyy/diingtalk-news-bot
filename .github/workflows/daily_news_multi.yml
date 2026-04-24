@@ -1,0 +1,27 @@
+name: Daily News Multi-Source
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # UTC每天00:00 → 北京时间08:00
+  workflow_dispatch:
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run multi-source news bot
+        env:
+          DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+        run: python news_bot_multi.py
