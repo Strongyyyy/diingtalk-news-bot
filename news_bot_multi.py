@@ -14,7 +14,6 @@ import urllib.parse
 DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK")
 DINGTALK_SECRET = os.getenv("DINGTALK_SECRET")  # 如果未启用加签可以留空
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-
 CACHE_FILE = "sent_news.txt"
 
 NEWS_SOURCES = [
@@ -31,11 +30,15 @@ NEWS_SOURCES = [
 def get_signed_webhook(webhook, secret):
     if not secret:
         return webhook
-    timestamp = str(round(time.time() * 1000))
-    string_to_sign = f'{timestamp}\n{secret}'
-    hmac_code = hmac.new(secret.encode(), string_to_sign.encode(), digestmod=hashlib.sha256).digest()
-    sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
-    return f"{webhook}&timestamp={timestamp}&sign={sign}"
+    try:
+        timestamp = str(round(time.time() * 1000))
+        string_to_sign = f'{timestamp}\n{secret}'
+        hmac_code = hmac.new(secret.encode(), string_to_sign.encode(), digestmod=hashlib.sha256).digest()
+        sign = urllib.parse.quote_plus(base64.b64encode(hmac_code))
+        return f"{webhook}&timestamp={timestamp}&sign={sign}"
+    except Exception as e:
+        print("生成加签失败:", e)
+        return webhook
 
 # ------------------------------
 # 获取新闻
@@ -53,7 +56,7 @@ def get_news_from_source(source):
         news_list = data['result']['data'][:10]
         return [{"title": n["title"], "url": n["url"]} for n in news_list]
     except Exception as e:
-        print(f"[{source['name']}] 异常: {e}")
+        print(f"[{source['name']}] 获取新闻异常: {e}")
         return []
 
 def get_all_news():
@@ -91,17 +94,17 @@ def deduplicate_news(news_list, sent_titles):
 # 推送到钉钉
 # ------------------------------
 def send_to_dingtalk(news_list):
-    if not news_list:
-        message = f"今日没有新新闻 ({datetime.now().strftime('%Y-%m-%d')})"
-    else:
-        message = f"### 今日新闻热点 ({datetime.now().strftime('%Y-%m-%d')})\n\n"
-        for n in news_list:
-            message += f"- [{n['title']}]({n['url']})\n"
-
-    payload = {"msgtype": "markdown", "markdown": {"title": "每日新闻热点", "text": message}}
-    headers = {"Content-Type": "application/json"}
-    webhook = get_signed_webhook(DINGTALK_WEBHOOK, DINGTALK_SECRET)
     try:
+        if not news_list:
+            message = f"今日没有新新闻 ({datetime.now().strftime('%Y-%m-%d')})"
+        else:
+            message = f"### 今日新闻热点 ({datetime.now().strftime('%Y-%m-%d')})\n\n"
+            for n in news_list:
+                message += f"- [{n['title']}]({n['url']})\n"
+
+        payload = {"msgtype": "markdown", "markdown": {"title": "每日新闻热点", "text": message}}
+        headers = {"Content-Type": "application/json"}
+        webhook = get_signed_webhook(DINGTALK_WEBHOOK, DINGTALK_SECRET)
         r = requests.post(webhook, headers=headers, data=json.dumps(payload), timeout=5)
         print("钉钉 HTTP 状态码:", r.status_code)
         print("钉钉返回内容:", r.text)
@@ -119,12 +122,15 @@ if __name__ == "__main__":
     print("DINGTALK_SECRET:", "存在" if DINGTALK_SECRET else "未设置")
     print("NEWS_API_KEY:", "存在" if NEWS_API_KEY else "未设置")
 
-    sent_titles = load_sent_titles()
-    all_news = get_all_news()
-    new_news = deduplicate_news(all_news, sent_titles)
-    result = send_to_dingtalk(new_news)
-    print("发送结果:", result)
+    try:
+        sent_titles = load_sent_titles()
+        all_news = get_all_news()
+        new_news = deduplicate_news(all_news, sent_titles)
+        result = send_to_dingtalk(new_news)
+        print("发送结果:", result)
 
-    if new_news:
-        updated_titles = sent_titles.union({n["title"] for n in new_news})
-        save_sent_titles(updated_titles)
+        if new_news:
+            updated_titles = sent_titles.union({n["title"] for n in new_news})
+            save_sent_titles(updated_titles)
+    except Exception as e:
+        print("主程序异常:", e)
